@@ -4,6 +4,8 @@ Reads, backs up and resets the waste ink counters of an Epson EcoTank **L3150, L
 
 It uses the EEPROM definitions from [epson_print_conf](https://github.com/Ircama/epson_print_conf) (release 8.2.0, in `vendor/`, EUPL-1.2 license).
 
+![Main window: printer found on the network, serial number verified, main waste ink counter at 94.37 %](docs/screenshots/1-counters.png)
+
 ## Read this first
 
 The counter only counts. Resetting it does **not** empty the waste ink pads inside the printer. If they are really full, ink can leak out of the bottom of the printer. Before or right after resetting, either:
@@ -42,6 +44,18 @@ python -m venv .venv
 3. **Change:** *Apply…* sets the main counter to the chosen percentage, *Full reset…* runs the full reset, *Restore backup…* writes a backup back. Each one saves a backup first (except restore), shows the exact bytes, and asks before writing.
 
 Everything is also written to the log at the bottom.
+
+Before anything is written, the tool shows exactly which bytes will change and where the backup was saved:
+
+![Confirmation dialog listing the EEPROM byte to change, the backup location and the pad warning](docs/screenshots/2-confirm.png)
+
+(Windows labels the buttons in your system language; *Da*/*Ne* are Yes/No in Slovenian.)
+
+After confirming, the counter is written, read back and shown again:
+
+![Main window after setting the main counter to 50 %](docs/screenshots/3-after.png)
+
+The screenshots use the simulated printer from the tests (made-up serial number and IP address). Regenerate them with `.venv\Scripts\python tools\make_screenshots.py`.
 
 The scan sends one read-only SNMP request to each address in this computer's own networks (each adapter's network up to /22, otherwise the /24 around the adapter's address). It doesn't reach other networks.
 
