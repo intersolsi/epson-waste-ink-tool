@@ -24,8 +24,9 @@ jobs:
       - name: Check that the tag matches the version
         shell: pwsh
         run: |
-          $version = python -c "import waste_ink; print(waste_ink.__version__)"
-          if ("v$version" -ne "${{ github.ref_name }}") { throw "Tag ${{ github.ref_name }} does not match version $version in waste_ink.py" }
+          # Read the version from the file: importing waste_ink needs the dependencies, which aren't installed yet.
+          $version = (Select-String -Path waste_ink.py -Pattern '^__version__ = "(.+)"').Matches[0].Groups[1].Value
+          if ("v$version" -ne "${{ github.ref_name }}") { throw "Tag ${{ github.ref_name }} does not match version '$version' in waste_ink.py" }
 
       - name: Install dependencies and Inno Setup
         shell: pwsh
