@@ -36,6 +36,7 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 Source: "dist\{#AppExe}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "dist\reset-waste-ink.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "README.md"; DestDir: "{app}"; Flags: ignoreversion
+Source: "LICENSE"; DestDir: "{app}"; DestName: "LICENSE.txt"; Flags: ignoreversion
 Source: "THIRD-PARTY-NOTICES.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "vendor\LICENSE"; DestDir: "{app}\licenses"; DestName: "epson_print_conf-EUPL-1.2.txt"; Flags: ignoreversion
 

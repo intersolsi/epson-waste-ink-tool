@@ -1,6 +1,6 @@
 # Third-party software
 
-The released programs (`EpsonWasteInk.exe`, `reset-waste-ink.exe`) are built with PyInstaller and include the following software.
+The Epson Waste Ink Tool itself is licensed under EUPL-1.2 (see `LICENSE`). The released programs (`EpsonWasteInk.exe`, `reset-waste-ink.exe`) are built with PyInstaller and include the following software.
 
 | Component | Version | License | Source |
 |---|---|---|---|

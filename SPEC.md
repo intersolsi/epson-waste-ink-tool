@@ -30,7 +30,10 @@ build.ps1                   release build: tests, PyInstaller (both programs), I
 installer.iss               Inno Setup script (per-user install, AppId fixed for upgrades)
 .github/workflows/release.yml  builds and publishes a GitHub release when a v* tag is pushed
 THIRD-PARTY-NOTICES.md      licenses of everything bundled into the programs
+LICENSE                     EUPL-1.2, the project's license
 ```
+
+The project is licensed EUPL-1.2, matching the bundled EUPL-1.2 libraries (epson_print_conf, pysnmp-sync-adapter, PyPrintLpr, epson_escp2). New dependencies must be EUPL-compatible.
 
 ### Packaging
 

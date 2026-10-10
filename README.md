@@ -142,3 +142,9 @@ See [SPEC.md](SPEC.md) for the full specification: commands, functions, safety r
 - **"The printer did not respond"**: check the IP address, that the printer is on, and that SNMP is not disabled in the printer's web settings (open the IP address in a browser).
 - **"Could not read a valid serial number from the EEPROM"**: the L3150 read key doesn't work on this printer, possibly because of a newer firmware. Nothing was written. Check the epson_print_conf issues page for your model and firmware.
 - **"The serial numbers differ"**: the memory layout doesn't match. Don't force it.
+
+## License
+
+Licensed under the [European Union Public Licence v. 1.2](LICENSE) (EUPL-1.2), the same license as the bundled epson_print_conf library. You may use, change and share the tool; if you distribute a modified version, it must stay under the EUPL (or a licence listed as compatible in its appendix) with its source code available. Official translations, including Slovenian, are on the [EU's EUPL page](https://interoperable-europe.ec.europa.eu/collection/eupl/eupl-text-eupl-12).
+
+Bundled third-party components and their licenses are listed in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
