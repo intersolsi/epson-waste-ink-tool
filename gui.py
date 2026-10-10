@@ -29,7 +29,7 @@ PAD_WARNING = ("Resetting changes the counter only. The waste ink pads stay as f
 class App(tk.Tk):
     def __init__(self) -> None:
         super().__init__()
-        self.title("Epson waste ink counters")
+        self.title(f"Epson waste ink counters {waste_ink.__version__}")
         self.minsize(640, 600)
         self.printer = None
         self.serial: str | None = None

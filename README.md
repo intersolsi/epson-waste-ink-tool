@@ -13,7 +13,15 @@ The counter only counts. Resetting it does **not** empty the waste ink pads insi
 
 The L3156 is not listed by name in epson_print_conf; it uses the L3150 definition. That's why the tool first checks that the serial number stored in the printer's EEPROM matches the serial number the printer reports over the network (or the one on its label). If they don't match, it stops without writing anything.
 
-## Setup (Windows)
+## Install (Windows)
+
+Download `EpsonWasteInk-<version>-setup.exe` from the [Releases](../../releases) page and run it. It installs for your user account only, so no administrator rights are needed, and adds a Start menu entry (and optionally a desktop icon). Uninstall it from *Settings → Apps*; backups in the program folder are kept.
+
+Windows may show a SmartScreen warning ("Windows protected your PC") because the installer isn't code-signed. Click *More info → Run anyway*.
+
+Prefer not to install? The release also has `EpsonWasteInk.exe` (GUI) and `reset-waste-ink.exe` (command line) as single portable files. They save backups in a `backups` folder next to themselves.
+
+## Run from source
 
 You need Python 3.10 or newer.
 
@@ -85,6 +93,25 @@ For the L3150 family, the reset sets these EEPROM addresses (taken from the defi
 | 50, 51 | 0 | borderless waste ink counter (shares byte 47) |
 | 54, 55 | 94 | "maintenance required level" of the 1st and 2nd waste ink counters |
 | 52, 53, 28 | 0 | reset by the epson_print_conf definition; their meaning isn't documented |
+
+## Building a release
+
+```powershell
+.venv\Scripts\python -m pip install -r requirements-build.txt
+winget install JRSoftware.InnoSetup      # once, for the installer
+.\build.ps1
+```
+
+`build.ps1` runs the tests, builds both programs with PyInstaller and the installer with Inno Setup (`installer.iss`). Everything lands in `dist\`.
+
+To publish on GitHub, raise `__version__` in `waste_ink.py`, commit, and push a matching tag:
+
+```powershell
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+The `Release` workflow (`.github/workflows/release.yml`) then builds everything on a Windows runner and creates the GitHub release with the installer and both portable programs attached.
 
 ## Tests
 

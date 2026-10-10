@@ -26,7 +26,18 @@ vendor/epson_print_conf.py  SNMP + EEPROM access and printer definitions
                             (Ircama/epson_print_conf release 8.2.0, commit 6873e9e, EUPL-1.2)
 tests/                      tests against a simulated printer (CLI and GUI)
 backups/                    JSON backups written before any change (not in git)
+build.ps1                   release build: tests, PyInstaller (both programs), Inno Setup installer
+installer.iss               Inno Setup script (per-user install, AppId fixed for upgrades)
+.github/workflows/release.yml  builds and publishes a GitHub release when a v* tag is pushed
+THIRD-PARTY-NOTICES.md      licenses of everything bundled into the programs
 ```
+
+### Packaging
+
+- PyInstaller builds two single-file programs: `EpsonWasteInk.exe` (GUI, no console) and `reset-waste-ink.exe` (command line). `vendor/` is added to the import path and all `pysnmp` submodules are collected, because pysnmp loads parts of itself dynamically.
+- In a packaged program `__file__` points to a temporary folder that is deleted on exit, so `APP_DIR` (where `backups/` lives) is the folder of the `.exe` instead.
+- The installer installs per user (`%LOCALAPPDATA%\Programs\Epson Waste Ink Tool`, no administrator rights). That keeps the program folder writable for backups. Uninstalling removes only installed files, so backups survive (tested).
+- The version lives in one place, `__version__` in `waste_ink.py`; `build.ps1` passes it to the installer, and the release workflow refuses a tag that doesn't match it.
 
 The core never prints, exits or asks questions. Problems raise `Stopped` (nothing was written) or `WriteFailed` (writing had started); confirmations are left to the interface. Both interfaces therefore share exactly the same checks and write logic.
 
@@ -207,7 +218,7 @@ Ordered by usefulness versus risk.
 | 7 | Monitoring | A read-only scheduled check that warns when the main counter passes a threshold (e.g. 80 %), as a reminder to service the pads or empty an external tank. |
 | 8 | More models | Accept other epson_print_conf definitions selected by the reported model name, keeping the serial-number proof mandatory. Each model is "unverified" until section 9 is done. |
 | 9 | USB connection | Upstream supports USB via the `epson-usb` package; needed for printers without network. Larger change: separate transport, Windows driver issues. |
-| 10 | Packaging | `pyproject.toml` with a console command and pinned, hashed dependencies (`pip install --require-hashes`). |
-| 11 | Standalone Windows app | Package `gui.py` with PyInstaller so it runs without installing Python. |
+| 10 | Pinned, hashed dependencies | Lock the build dependencies with hashes (`pip install --require-hashes`) so releases are reproducible. |
+| 11 | Code signing | Sign the programs and the installer so Windows SmartScreen doesn't warn. Needs a code signing certificate. |
 
-Done: printer discovery and a graphical interface (both added after the first version of this spec).
+Done: printer discovery, a graphical interface, standalone programs and a Windows installer with GitHub release automation (all added after the first version of this spec).

@@ -1,0 +1,50 @@
+# Push a version tag to build and publish a release:
+#   git tag v1.0.0 && git push origin v1.0.0
+# The tag must match __version__ in waste_ink.py.
+
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Check that the tag matches the version
+        shell: pwsh
+        run: |
+          $version = python -c "import waste_ink; print(waste_ink.__version__)"
+          if ("v$version" -ne "${{ github.ref_name }}") { throw "Tag ${{ github.ref_name }} does not match version $version in waste_ink.py" }
+
+      - name: Install dependencies and Inno Setup
+        shell: pwsh
+        run: |
+          python -m pip install -r requirements-build.txt
+          choco install innosetup --no-progress -y
+
+      - name: Build
+        shell: pwsh
+        run: ./build.ps1
+
+      - name: Publish the release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $version = "${{ github.ref_name }}".TrimStart("v")
+          gh release create "${{ github.ref_name }}" `
+            "dist/EpsonWasteInk-$version-setup.exe" `
+            "dist/EpsonWasteInk.exe" `
+            "dist/reset-waste-ink.exe" `
+            --title "Epson Waste Ink Tool $version" --generate-notes

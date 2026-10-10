@@ -21,18 +21,23 @@ from typing import Callable
 
 HERE = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE / "vendor"))
+# In a packaged .exe, __file__ is in a temporary folder that is deleted on exit;
+# keep backups next to the .exe instead.
+APP_DIR = pathlib.Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else HERE
 
 from epson_print_conf import EpsonPrinter  # noqa: E402
 
 # The L3156 is a regional variant of the L3150; epson_print_conf defines the
 # family under "L3150". Its serial number and reset addresses come from the
 # L4160 entry ("same-as").
+__version__ = "1.0.0"
+
 DEFINITION = "L3150"
 # Standard Printer-MIB serial number (prtGeneralSerialNumber), reported by the
 # network interface independently of the EEPROM.
 SERIAL_OID = "1.3.6.1.2.1.43.5.1.1.17.1"
 SYS_DESCR_OID = "1.3.6.1.2.1.1.1.0"
-BACKUP_DIR = HERE / "backups"
+BACKUP_DIR = APP_DIR / "backups"
 
 
 class Stopped(Exception):

@@ -93,6 +93,7 @@ def main(argv: list[str] | None = None) -> None:
                         help="back up, then set only the main waste ink counter to PERCENT (0-100)")
     action.add_argument("--restore", metavar="BACKUP", type=pathlib.Path, help="write a backup file back")
     parser.add_argument("--debug", action="store_true", help="show the library's debug output")
+    parser.add_argument("--version", action="version", version=f"%(prog)s {waste_ink.__version__}")
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.DEBUG if args.debug else logging.CRITICAL)
 

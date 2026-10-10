@@ -1,4 +1,7 @@
 .venv/
+build/
+dist/
+*.spec
 __pycache__/
 *.pyc
 # Backups contain the printer's serial number and EEPROM contents.
