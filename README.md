@@ -1,0 +1,89 @@
+# Epson L3150-family waste ink counter tool
+
+Reads, backs up and resets the waste ink counters of an Epson EcoTank **L3150, L3151, L3156, L3160** (and other L3150-family models) over the network.
+
+It uses the EEPROM definitions from [epson_print_conf](https://github.com/Ircama/epson_print_conf) (release 8.2.0, in `vendor/`, EUPL-1.2 license).
+
+## Read this first
+
+The counter only counts. Resetting it does **not** empty the waste ink pads inside the printer. If they are really full, ink can leak out of the bottom of the printer. Before or right after resetting, either:
+
+- replace the waste ink pads, or
+- fit an external waste ink tank (a common modification for EcoTank printers).
+
+The L3156 is not listed by name in epson_print_conf; it uses the L3150 definition. That's why the tool first checks that the serial number stored in the printer's EEPROM matches the serial number the printer reports over the network (or the one on its label). If they don't match, it stops without writing anything.
+
+## Setup (Windows)
+
+You need Python 3.10 or newer.
+
+```powershell
+cd D:\Development\tools\epson-waste-ink
+python -m venv .venv
+.venv\Scripts\python -m pip install -r requirements.txt
+```
+
+## Find the printer's IP address
+
+Print a network status sheet from the printer (the button sequence is in the printer's manual under "printing a network status sheet"), or look the printer up in your router's list of connected devices. The printer and this computer must be on the same network.
+
+## Use
+
+**1. Read only** (always safe, writes nothing):
+
+```powershell
+.venv\Scripts\python reset_waste_ink.py 192.168.1.50
+```
+
+It shows the model, firmware, serial number check and the current counter levels in percent. 100 % is where the printer stops.
+
+**2. Reset:**
+
+```powershell
+.venv\Scripts\python reset_waste_ink.py 192.168.1.50 --reset
+```
+
+It saves a backup of every byte it is about to change to `backups\<serial>-<date>.json`, lists the exact changes, and only writes after you type `yes`. Every write is read back to confirm it took effect. Switch the printer off and on afterwards.
+
+**Or set the main counter to a chosen level** instead of 0 %:
+
+```powershell
+.venv\Scripts\python reset_waste_ink.py 192.168.1.50 --set-main 50
+```
+
+This writes only the main counter bytes that need to change (usually one or two), leaves every other address alone, and refuses values that would touch a byte the borderless counter shares. A partial setting like 50 % keeps an early warning: the printer stops again after about half the original pad capacity, instead of only when the pads are completely saturated. Same backup and confirmation as `--reset`.
+
+**3. Undo** (writes a backup back to the same printer):
+
+```powershell
+.venv\Scripts\python reset_waste_ink.py 192.168.1.50 --restore backups\X5NY012345-20261010-153000.json
+```
+
+Add `--debug` to any command to see the underlying SNMP traffic.
+
+## What gets written
+
+For the L3150 family, the reset sets these EEPROM addresses (taken from the definition, which the tool shows again before writing):
+
+| Address | New value | Meaning |
+|---|---|---|
+| 47, 48, 49 | 0 | main waste ink counter |
+| 50, 51 | 0 | borderless waste ink counter (shares byte 47) |
+| 54, 55 | 94 | "maintenance required level" of the 1st and 2nd waste ink counters |
+| 52, 53, 28 | 0 | reset by the epson_print_conf definition; their meaning isn't documented |
+
+## Tests
+
+The tests run against a simulated printer, so no printer or network is needed:
+
+```powershell
+.venv\Scripts\python -m unittest discover tests
+```
+
+See [SPEC.md](SPEC.md) for the full specification: commands, functions, safety rules, EEPROM layout, and planned additions.
+
+## Troubleshooting
+
+- **"The printer did not respond"**: check the IP address, that the printer is on, and that SNMP is not disabled in the printer's web settings (open the IP address in a browser).
+- **"Could not read a valid serial number from the EEPROM"**: the L3150 read key doesn't work on this printer, possibly because of a newer firmware. Nothing was written. Check the epson_print_conf issues page for your model and firmware.
+- **"The serial numbers differ"**: the memory layout doesn't match. Don't force it.

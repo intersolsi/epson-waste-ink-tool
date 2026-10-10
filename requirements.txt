@@ -1,0 +1,6 @@
+# Dependencies of vendor/epson_print_conf.py (Ircama/epson_print_conf, release 8.2.0)
+pyyaml
+pysnmp>=7.1.20
+pysnmp_sync_adapter>=1.1.0
+pyprintlpr>=1.1.1
+epson_escp2>=1.0.4
