@@ -20,6 +20,7 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "vendor"))
 
 import reset_waste_ink as tool  # noqa: E402
+import waste_ink  # noqa: E402
 from epson_print_conf import EpsonPrinter  # noqa: E402
 
 SERIAL = "X5NY012345"
@@ -64,19 +65,14 @@ class SimulatedPrinterTest(unittest.TestCase):
         self.tmp.cleanup()
 
     def run_tool(self, *args, answers=("yes",)):
-        """Run main() with the given arguments; returns (exit code, output)."""
+        """Run the command line tool with the given arguments; returns (exit code, output)."""
         replies = iter(answers)
         out = io.StringIO()
-        with mock.patch.object(tool, "EpsonPrinter", FakePrinter), \
-                mock.patch.object(tool, "BACKUP_DIR", self.backup_dir), \
-                mock.patch.object(sys, "argv", ["reset_waste_ink.py", "192.0.2.1", *args]), \
+        with mock.patch.object(waste_ink, "EpsonPrinter", FakePrinter), \
+                mock.patch.object(waste_ink, "BACKUP_DIR", self.backup_dir), \
                 mock.patch.object(builtins, "input", lambda prompt="": next(replies)), \
                 contextlib.redirect_stdout(out):
-            try:
-                tool.main()
-                code = 0
-            except SystemExit as e:
-                code = e.code
+            code = tool.cli(["192.0.2.1", *args])
         return code, out.getvalue()
 
     def latest_backup(self):

@@ -23,11 +23,25 @@ python -m venv .venv
 .venv\Scripts\python -m pip install -r requirements.txt
 ```
 
+## Graphical interface
+
+```powershell
+.venv\Scripts\python gui.py
+```
+
+1. **Printer:** click *Scan network* to find Epson printers on this computer's networks (about 10–20 seconds), or type the IP address and click *Add*.
+2. **Counters:** select the printer and click *Read counters* (or double-click it). The serial number check runs first; the change buttons stay disabled until it passes.
+3. **Change:** *Apply…* sets the main counter to the chosen percentage, *Full reset…* runs the full reset, *Restore backup…* writes a backup back. Each one saves a backup first (except restore), shows the exact bytes, and asks before writing.
+
+Everything is also written to the log at the bottom.
+
+The scan sends one read-only SNMP request to each address in this computer's own networks (each adapter's network up to /22, otherwise the /24 around the adapter's address). It doesn't reach other networks.
+
 ## Find the printer's IP address
 
-Print a network status sheet from the printer (the button sequence is in the printer's manual under "printing a network status sheet"), or look the printer up in your router's list of connected devices. The printer and this computer must be on the same network.
+Not needed with the GUI's scan. Otherwise, print a network status sheet from the printer (the button sequence is in the printer's manual under "printing a network status sheet"), or look the printer up in your router's list of connected devices. The printer and this computer must be on the same network. If you're connected to the printer's own Wi-Fi Direct network (`DIRECT-xx-EPSON-...`), the printer is at `192.168.223.1`.
 
-## Use
+## Command line
 
 **1. Read only** (always safe, writes nothing):
 

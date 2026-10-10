@@ -19,12 +19,16 @@ Connection: network only (SNMP v1, community `public`, UDP 161). Works over norm
 ## 3. Architecture
 
 ```text
-reset_waste_ink.py          CLI and all safety logic (this project)
+waste_ink.py                core: identity, safety checks, plans, backups, writes, printer discovery
+reset_waste_ink.py          command line interface on top of the core
+gui.py                      Tkinter interface on top of the core
 vendor/epson_print_conf.py  SNMP + EEPROM access and printer definitions
                             (Ircama/epson_print_conf release 8.2.0, commit 6873e9e, EUPL-1.2)
-tests/                      unit tests against a simulated printer
+tests/                      tests against a simulated printer (CLI and GUI)
 backups/                    JSON backups written before any change (not in git)
 ```
+
+The core never prints, exits or asks questions. Problems raise `Stopped` (nothing was written) or `WriteFailed` (writing had started); confirmations are left to the interface. Both interfaces therefore share exactly the same checks and write logic.
 
 The library is vendored at a fixed commit on purpose: the EEPROM addresses written by this tool come from its definitions, and an upstream change must never alter them silently. Upgrading the library is a deliberate change that requires re-running the verification in section 9.
 
@@ -51,7 +55,7 @@ add --debug to any command for library/SNMP debug logging
 ### Flow common to all commands
 
 1. Connect with the `L3150` definition.
-2. **Identify** (section 5, `identify`): model check, EEPROM serial, network serial, comparison.
+2. **Identify** (section 5, `read_identity` then `verify`): model check, EEPROM serial, network serial, comparison.
 3. Show current counter levels.
 4. Command-specific steps below. Nothing is written in read-only mode.
 
@@ -64,34 +68,58 @@ add --debug to any command for library/SNMP debug logging
 
 Every write path shows `address: current -> new` for each byte and requires the user to type `yes`.
 
+### Graphical interface (`gui.py`)
+
+Three sections, used top to bottom, plus a log:
+
+1. **Printer:** a list of printers. *Scan network* fills it with `discover()`, showing a progress bar; *Add* inserts an IP address typed by hand.
+2. **Counters:** *Read counters* (or double-clicking a printer) runs `read_identity()`, shows model, name, firmware and both serial numbers, runs `verify()` (with a yes/no dialog for the label if needed), then shows both counters as progress bars and percentages.
+3. **Change:** *Apply…* (`plan_set_main` with the spin box value), *Full reset…* (`plan_reset`) and *Restore backup…* (`plan_restore` with a file chosen from `backups/`). Each saves a backup first (except restore), lists the exact bytes with the backup path and the pad warning in a confirmation dialog, and writes only on *Yes*.
+
+The change buttons are disabled until a printer has passed `verify()`, and everything is disabled while an operation runs. Network work runs in a background thread; results return to the UI thread through a queue, so the window never freezes and widgets are only touched from the UI thread. Dialogs and `verify()` run on the UI thread.
+
 ## 5. Functions
 
-| Function | Responsibility | Fails with |
+### Core (`waste_ink.py`)
+
+| Function | Responsibility | Raises |
 |---|---|---|
-| `connect(host)` | Create an `EpsonPrinter` for the `L3150` definition (timeout 5 s, 2 retries) and register the Printer-MIB serial number OID `1.3.6.1.2.1.43.5.1.1.17.1` | exit 1 if the definition is missing |
-| `snmp_value(printer, name)` | Read one SNMP value; a timeout returns `None`. Values are read one by one because the L3156 never answers some of the library's other OIDs, which made a bulk read time out | never raises on timeout |
-| `identify(printer)` | Print model, printer name, firmware; refuse non-`L31` models; read the serial number from EEPROM (1604–1613) with the L3150 read key; compare it with the network serial, or ask the user to compare it with the label. Returns the serial number | exit 1 on any mismatch or unreadable serial |
-| `show_levels(printer, title)` | Print every waste counter the definition knows, in percent | exit 1 if unreadable |
-| `addresses_to_reset(printer)` | The `raw_waste_reset` map of the definition, or zero for every main/borderless counter byte if there is none | — |
-| `main_counter_bytes(printer, percent, current)` | Encode `round(percent × divider)` little-endian over the main counter's OIDs; return only bytes that differ from `current` | exit 1 if a changed byte is shared with the borderless counter, or the value doesn't fit |
-| `read_bytes(printer, oids)` | Read EEPROM bytes as integers | exit 1 if any byte is unreadable |
-| `backup(host, serial, values)` | Write `backups/<serial>-<YYYYmmdd-HHMMSS>.json` (format in section 7) and return its path | — |
-| `confirm(changes)` | List the planned bytes and require `yes` | exit 1 on any other answer |
-| `write(printer, changes)` | Write each byte through `write_eeprom()`, which reads it back and fails if it didn't change | exit 2 on the first failure or exception |
-| `fail(message)` | Print `STOP: ...` and `Nothing was written to the printer.` | exit 1 |
-| `main()` | Parse arguments and run the flow in section 4. A `TimeoutError` outside `write()` exits 1 with "The printer did not respond" | — |
+| `connect(host)` | Create an `EpsonPrinter` for the `L3150` definition (timeout 5 s, 2 retries) and register the Printer-MIB serial number OID `1.3.6.1.2.1.43.5.1.1.17.1` | `Stopped` if the definition is missing |
+| `snmp_value(printer, name)` | Read one SNMP value; a timeout returns `None`. Values are read one by one because the L3156 never answers some of the library's other OIDs, which made a bulk read time out | — |
+| `read_identity(printer)` | Return a `PrinterInfo`: model, name, firmware, network serial, and the serial read from EEPROM (1604–1613) with the L3150 read key (`None` if invalid). Judges nothing, so callers can show it before the check | `Stopped` if the printer answers no SNMP at all |
+| `verify(info, confirm_label)` | Refuse non-`L31` models and an unreadable EEPROM serial; compare EEPROM and network serial, or call `confirm_label(serial)` if there is no network serial. Returns the serial | `Stopped` on any failed check |
+| `levels(printer)` | Every waste counter the definition knows, in percent | `Stopped` if unreadable |
+| `read_bytes(printer, oids)` | EEPROM bytes as integers | `Stopped` if any byte is unreadable |
+| `plan_reset(printer)` | A `Plan` for the definition's `raw_waste_reset` map (or zero for every main/borderless byte if there is none), with the current values | `Stopped` (read errors) |
+| `plan_set_main(printer, percent)` | A `Plan` with only the main counter bytes that change: `round(percent × divider)` encoded least significant byte first over the main counter's OIDs | `Stopped` if out of 0–100, too large, or a changed byte is shared with the borderless counter |
+| `plan_restore(printer, path, serial)` | A `Plan` that writes a backup's values back | `Stopped` if the backup belongs to another printer |
+| `save_backup(host, serial, values)` | Write `backups/<serial>-<YYYYmmdd-HHMMSS>.json` (section 7) and return its path | — |
+| `apply(printer, plan)` | Write each byte through `write_eeprom()`, which reads it back and fails if it didn't change | `WriteFailed` on the first failure |
+| `local_networks()` | This computer's IPv4 networks from `psutil`: each adapter's own network if it's /22 or smaller, otherwise the /24 around the adapter's address; loopback and link-local skipped | — |
+| `discover(networks, timeout, on_progress)` | Send an SNMP `sysDescr` request (1 s timeout, 1 retry, up to 300 in parallel) to every address in the networks; for answers containing "EPSON", also read model and printer name. Returns `FoundPrinter` entries sorted by address | — |
+
+`Plan` holds a description, the `current` values (what a backup saves) and `changes` (`address -> (old, new)`). An empty `changes` means there is nothing to write.
+
+### Command line (`reset_waste_ink.py`)
+
+`cli(argv)` runs `main(argv)` and turns `Stopped` and `TimeoutError` into exit code 1 ("STOP: … Nothing was written to the printer."), and `WriteFailed` into exit code 2 (with the hint to restore the backup). `main` prints the identity, levels and planned changes, and asks for `yes` with `input()`.
+
+### GUI (`gui.py`)
+
+`App` (a `tk.Tk`) with `scan`, `add_manual`, `read_counters`, `set_main`, `full_reset` and `restore` as the button actions; `background(work, on_done)` runs network work in a thread; `_confirm(plan, backup)` saves the backup and shows the confirmation dialog.
 
 ## 6. Safety invariants
 
-These must hold for every change to the tool; the tests in `tests/` cover each of them.
+These must hold for every change to the tool, in both the command line and the GUI; the tests in `tests/` cover each of them.
 
-1. **Nothing is written without an explicit `yes`.** Read-only is the default.
-2. **A backup is saved before the first write** of `--reset` and `--set-main`.
+1. **Nothing is written without an explicit confirmation:** typing `yes` on the command line, *Yes* in the GUI dialog. Reading is the default.
+2. **A backup is saved before the first write** of a full reset or a main counter change.
 3. **The memory layout is proven before writing:** the EEPROM serial (read with the definition's key and addresses) must equal the network or label serial.
 4. **Only L3150-family printers are accepted.**
 5. **Only definition addresses are written:** the reset map, the main counter bytes, or the addresses already in a backup. No user-supplied addresses.
 6. **Every write is verified** by reading the byte back.
-7. **Shared bytes are protected:** `--set-main` never changes a byte that the borderless counter also uses (address 47 on L3150).
+7. **Shared bytes are protected:** setting the main counter never changes a byte that the borderless counter also uses (address 47 on L3150).
+11. **No changes before verification in the GUI:** the change buttons stay disabled until the selected printer has passed the serial check.
 8. **A backup can only be restored to the printer it came from** (serial check).
 9. **Idempotence:** setting a value that is already there writes nothing.
 10. **The library is pinned** to a reviewed commit.
@@ -132,7 +160,12 @@ Observed on the verified L3156 before any change: `47=0, 48=101, 49=23, 50=21, 5
 .venv\Scripts\python -m unittest discover tests
 ```
 
-`tests/test_simulated_printer.py` replaces the library's SNMP and EEPROM access with an in-memory printer seeded with the real L3156 byte values, and uses a temporary backup folder, so it never touches a printer or the real `backups/`. It covers: read-only, serial mismatch, wrong model, declined confirmation, missing network serial, full reset bytes and backup, `--set-main 50` writing only byte 49, idempotence, out-of-range percent, restore, and refusing another printer's backup.
+Both test files replace the library's SNMP and EEPROM access with an in-memory printer seeded with the real L3156 byte values, and use a temporary backup folder, so they never touch a printer or the real `backups/`.
+
+- `tests/test_simulated_printer.py` (command line, 11 tests): read-only, serial mismatch, wrong model, declined confirmation, missing network serial, full reset bytes and backup, `--set-main 50` writing only byte 49, idempotence, out-of-range percent, restore, and refusing another printer's backup.
+- `tests/test_gui.py` (GUI, 7 tests): opens the real window hidden, simulates the button actions and answers the dialogs. Covers buttons disabled until verification, reading identity and counters, a serial mismatch keeping changes disabled, setting 50 % with the confirmation text, backup and write, declining, restoring, and listing scan results.
+
+`discover()` itself needs a real network and is checked manually (section 9).
 
 ## 9. Manual verification on a real printer
 
@@ -147,6 +180,8 @@ Required for a new model, a new firmware, or a library upgrade:
 
 Add the model and firmware to section 2 once verified.
 
+For the GUI's scan: on the printer's network, *Scan network* must list the printer with its model and name.
+
 ## 10. Known limitations
 
 - Network (SNMP) only; no USB.
@@ -154,6 +189,8 @@ Add the model and firmware to section 2 once verified.
 - Three addresses in the full reset (52, 53, 28) have no documented meaning; `--set-main` avoids them.
 - A firmware update could change the read or write key. The serial check would then fail safely (nothing written).
 - The waste ink pads themselves are not emptied.
+- The scan only finds printers that answer SNMP with community `public` and only covers this computer's own networks (larger networks are limited to the /24 around the adapter). A printer elsewhere can still be added by IP address.
+- A scan of several networks takes 10–20 seconds, because addresses that don't answer have to time out (1 s, 1 retry).
 
 ## 11. Possible additions
 
@@ -166,9 +203,11 @@ Ordered by usefulness versus risk.
 | 3 | Show more statistics | The definition's `stats` (total pages, scans, ink replacements, first-use time) are read-only and safe to display, e.g. with `--stats`. |
 | 4 | Verified-firmware list | Record firmware versions that passed section 9; warn (not block) on an unknown firmware. |
 | 5 | Action log | Append every write (time, serial, address, old, new, result) to `backups/actions.log` for an audit trail independent of backup files. |
-| 6 | Printer discovery | Find Epson printers on the local network via SNMP (`sysDescr` contains "EPSON") so the user doesn't need the IP address. Must not scan beyond the local subnet. |
+| 6 | Faster or selectable scan | Let the user pick which network to scan (e.g. only the Wi-Fi), and remember the last printer found. |
 | 7 | Monitoring | A read-only scheduled check that warns when the main counter passes a threshold (e.g. 80 %), as a reminder to service the pads or empty an external tank. |
 | 8 | More models | Accept other epson_print_conf definitions selected by the reported model name, keeping the serial-number proof mandatory. Each model is "unverified" until section 9 is done. |
 | 9 | USB connection | Upstream supports USB via the `epson-usb` package; needed for printers without network. Larger change: separate transport, Windows driver issues. |
 | 10 | Packaging | `pyproject.toml` with a console command and pinned, hashed dependencies (`pip install --require-hashes`). |
-| 11 | Graphical interface | Only after the CLI is stable; the safety flow (checks, backup, explicit confirmation) must stay identical. |
+| 11 | Standalone Windows app | Package `gui.py` with PyInstaller so it runs without installing Python. |
+
+Done: printer discovery and a graphical interface (both added after the first version of this spec).
